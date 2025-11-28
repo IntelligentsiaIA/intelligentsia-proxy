@@ -1,0 +1,20 @@
+{
+  "name": "intelligentsia-proxy",
+  "version": "1.0.0",
+  "description": "Proxy API pour Intelligentsia - Contournement CORS",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "proxy",
+    "api",
+    "vercel",
+    "serverless"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

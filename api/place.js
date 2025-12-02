@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -8,53 +7,32 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { q, secteur, zone, rows } = req.query;
-  const searchTerm = q || secteur || '';
+  const { q, rows } = req.query;
   const limit = rows || 20;
   
-  if (!searchTerm) {
-    return res.status(400).json({ 
-      error: 'Paramètre q ou secteur requis' 
-    });
+  if (!q) {
+    return res.status(400).json({ error: 'Paramètre q requis' });
   }
   
   try {
-    // ✅ URL simplifiée qui fonctionne
-    const baseUrl = 'https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp_augmente/records';
-    const url = `${baseUrl}?limit=${limit}&order_by=date_publication DESC`;
-    
-    console.log('[PLACE] Appel:', url);
+    const url = `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp_augmente/records?limit=${limit}&order_by=date_publication%20DESC`;
     
     const response = await fetch(url);
     
     if (!response.ok) {
-      console.error('[PLACE] Erreur HTTP:', response.status);
-      return res.status(500).json({ 
-        error: `API PLACE ${response.status}` 
-      });
+      return res.status(500).json({ error: `API PLACE ${response.status}` });
     }
     
     const data = await response.json();
+    let results = data.results || [];
     
-    if (!data.results) {
-      console.error('[PLACE] Pas de résultats dans la réponse');
-      return res.status(500).json({ 
-        error: 'Format de réponse invalide' 
-      });
-    }
+    // Filtrer côté serveur
+    const searchLower = q.toLowerCase();
+    results = results.filter(m => {
+      const objet = (m.objet || '').toLowerCase();
+      return objet.includes(searchLower);
+    });
     
-    // Filtrer côté serveur si terme de recherche
-    let results = data.results;
-    
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      results = results.filter(m => {
-        const objet = (m.objet || '').toLowerCase();
-        return objet.includes(searchLower);
-      });
-    }
-    
-    // Formater les résultats
     const formatted = {
       total: results.length,
       marches: results.map(m => ({
@@ -72,37 +50,25 @@ export default async function handler(req, res) {
       }))
     };
     
-    console.log(`[PLACE] ${formatted.total} marchés trouvés`);
-    
     return res.status(200).json(formatted);
     
   } catch (error) {
-    console.error('[PLACE] Exception:', error.message);
     return res.status(500).json({ 
       error: 'Erreur serveur',
-      message: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: error.message
     });
   }
 }
 
 function classifyForTPE(montant) {
-  if (!montant || montant === 0) {
-    return { 
-      niveau: 'Inconnu', 
-      color: 'gray', 
-      badge: '❓', 
-      conseil: 'Montant non communiqué' 
-    };
+  if (!montant) {
+    return { niveau: 'Inconnu', color: 'gray', badge: '❓', conseil: 'Montant NC' };
   }
-  
   if (montant < 25000) {
-    return { 
-      niveau: 'Débutant', 
-      color: 'green', 
-      badge: '🟢', 
-      conseil: 'Idéal pour démarrer sans références' 
-    };
+    return { niveau: 'Débutant', color: 'green', badge: '🟢', conseil: 'Idéal pour démarrer' };
   }
-  
   if (montant < 100000) {
+    return { niveau: 'Intermédiaire', color: 'orange', badge: '🟠', conseil: 'Quelques références demandées' };
+  }
+  return { niveau: 'Expert', color: 'red', badge: '🔴', conseil: 'Grandes entreprises' };
+}

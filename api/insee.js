@@ -13,20 +13,32 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Paramètre q requis' });
   }
   
+  const apiKey = process.env.INSEE_API_KEY;
+  
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Clé API INSEE manquante' });
+  }
+  
   try {
-    // NOUVELLE URL 2025 : api-sirene au lieu de entreprises/sirene
+    // NOUVELLE URL portail API INSEE 2025
     const url = `https://api.insee.fr/api-sirene/3.11/siret?q=${encodeURIComponent(q)}&nombre=${nombre}`;
     
     const response = await fetch(url, {
       headers: {
-        // NOUVEAU HEADER 2025 : X-INSEE-Api-Key-Integration
-        'X-INSEE-Api-Key-Integration': process.env.INSEE_API_KEY,
+        // Nouveau format avec Authorization Bearer
+        'Authorization': `Bearer ${apiKey}`,
         'Accept': 'application/json'
       }
     });
     
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Erreur détaillée:', {
+        status: response.status,
+        url: url,
+        keyPrefix: apiKey.substring(0, 8) + '...',
+        error: errorText
+      });
       throw new Error(`INSEE API ${response.status}: ${errorText}`);
     }
     

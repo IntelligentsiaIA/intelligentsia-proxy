@@ -14,12 +14,13 @@ export default async function handler(req, res) {
   }
   
   try {
-    // URL avec version V3.11
-    const url = `https://api.insee.fr/entreprises/sirene/V3.11/siret?q=${encodeURIComponent(q)}&nombre=${nombre}`;
+    // NOUVELLE URL 2025 : api-sirene au lieu de entreprises/sirene
+    const url = `https://api.insee.fr/api-sirene/3.11/siret?q=${encodeURIComponent(q)}&nombre=${nombre}`;
     
     const response = await fetch(url, {
       headers: {
-        'Authorization': `Bearer ${process.env.INSEE_API_KEY}`,
+        // NOUVEAU HEADER 2025 : X-INSEE-Api-Key-Integration
+        'X-INSEE-Api-Key-Integration': process.env.INSEE_API_KEY,
         'Accept': 'application/json'
       }
     });

@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // Headers CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -7,53 +8,53 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { activite, departement, per_page = 100 } = req.query;
+  const { activite, departement, per_page } = req.query;
+  const limit = per_page || 100;
   
   if (!activite || !departement) {
     return res.status(400).json({ 
-      error: 'Paramètres requis' 
+      error: 'Paramètres activite et departement requis' 
     });
   }
   
   try {
-    // ✅ API ALTERNATIVE : Recherche Entreprises (Gouv.fr - GRATUITE)
-    // Plus stable que api-sirene.data.gouv.fr
-    const url = `https://recherche-entreprises.api.gouv.fr/search?activite_principale=${activite}&departement=${departement}&per_page=${per_page}&minimal=false`;
+    // API Recherche Entreprises (gouvernement français - gratuite)
+    const url = `https://recherche-entreprises.api.gouv.fr/search?activite_principale=${activite}&departement=${departement}&per_page=${limit}`;
     
-    console.log('[ENTREPRISES] Appel:', url);
-    
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Intelligentsia/1.0'
-      }
-    });
+    const response = await fetch(url);
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[ENTREPRISES] Erreur:', response.status, errorText);
-      throw new Error(`API ${response.status}`);
+      return res.status(response.status).json({ 
+        error: `API error ${response.status}` 
+      });
     }
     
     const data = await response.json();
     
-    // Transformer au format Sirene pour compatibilité
+    // Format compatible Sirene
+    const results = data.results || [];
     const formatted = {
       total_results: data.total_results || 0,
-      etablissements: (data.results || []).map(e => ({
-        siret: e.siege?.siret || e.siren,
-        date_creation: e.date_creation_entreprise,
-        libelle_commune: e.siege?.libelle_commune || 'NC',
-        geo_adresse: e.siege?.geo_adresse || e.siege?.libelle_commune,
-        tranche_effectifs: e.tranche_effectif_salarie_entreprise?.code || 'NN',
-        activite_principale: e.activite_principale,
-        nom_complet: e.nom_complet || e.nom_raison_sociale
-      }))
+      etablissements: results.map(item => {
+        const siege = item.siege || {};
+        return {
+          siret: siege.siret || item.siren || '',
+          date_creation: item.date_creation_entreprise || null,
+          libelle_commune: siege.libelle_commune || '',
+          geo_adresse: siege.geo_adresse || siege.libelle_commune || '',
+          tranche_effectifs: item.tranche_effectif_salarie_entreprise?.code || 'NN',
+          activite_principale: item.activite_principale || activite,
+          nom_complet: item.nom_complet || item.nom_raison_sociale || ''
+        };
+      })
     };
-    
-    console.log(`[ENTREPRISES] ${formatted.total_results} résultats trouvés`);
     
     return res.status(200).json(formatted);
     
   } catch (error) {
-    console.error('
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+}

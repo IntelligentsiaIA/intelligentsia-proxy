@@ -16,23 +16,44 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Nettoyage de l'input
+    const cleanInput = input.trim();
+    
     // Étape 1 : Trouver le place_id
-    const searchResponse = await fetch(
-      `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(input)}&inputtype=textquery&fields=place_id&key=${apiKey}`
-    );
+    const searchUrl = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(cleanInput)}&inputtype=textquery&fields=place_id&key=${apiKey}`;
+    
+    console.log('🔍 Recherche:', cleanInput);
+    
+    const searchResponse = await fetch(searchUrl);
     const searchData = await searchResponse.json();
 
-    if (!searchData.candidates || searchData.candidates.length === 0) {
-      return res.status(404).json({ error: 'Établissement non trouvé' });
+    console.log('📊 Résultat Google:', searchData);
+
+    if (searchData.status !== 'OK' || !searchData.candidates || searchData.candidates.length === 0) {
+      return res.status(404).json({ 
+        error: 'Établissement non trouvé',
+        debug: {
+          status: searchData.status,
+          input: cleanInput,
+          candidates: searchData.candidates?.length || 0
+        }
+      });
     }
 
     const placeId = searchData.candidates[0].place_id;
 
     // Étape 2 : Récupérer les détails et avis
-    const detailsResponse = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,rating,user_ratings_total,reviews&key=${apiKey}&language=fr`
-    );
+    const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,rating,user_ratings_total,reviews&key=${apiKey}&language=fr`;
+    
+    const detailsResponse = await fetch(detailsUrl);
     const detailsData = await detailsResponse.json();
+
+    if (detailsData.status !== 'OK') {
+      return res.status(500).json({ 
+        error: 'Erreur récupération détails',
+        status: detailsData.status 
+      });
+    }
 
     return res.status(200).json(detailsData.result);
     

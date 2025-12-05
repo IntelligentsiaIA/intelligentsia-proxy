@@ -8,11 +8,9 @@ export default async function handler(req, res) {
   }
 
   const { q, rows } = req.query;
-  const limit = rows || 20;
+  const limit = rows || 200;
   
   try {
-    // Nouvelle API v3 (dataset actif)
-    // Supprimer temporairement le order_by
     const url = `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=200`;
     
     const response = await fetch(url);
@@ -30,10 +28,10 @@ export default async function handler(req, res) {
     
     // Filtrer côté serveur si paramètre q fourni
     if (q) {
-      const searchLower = q.toLowerCase();
+      const searchTerms = q.toLowerCase().split(' ').filter(t => t.length > 2);
       results = results.filter(m => {
         const objet = (m.objet || '').toLowerCase();
-        return objet.includes(searchLower);
+        return searchTerms.some(term => objet.includes(term));
       });
     }
     
@@ -60,7 +58,8 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ 
       error: 'Erreur serveur',
-      message: error.message
+      message: error.message,
+      stack: error.stack
     });
   }
 }
@@ -77,6 +76,3 @@ function classifyForTPE(montant) {
   }
   return { niveau: 'Expert', color: 'red', badge: '🔴', conseil: 'Grandes entreprises' };
 }
-
-
-

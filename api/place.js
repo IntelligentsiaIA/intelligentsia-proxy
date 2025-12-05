@@ -7,10 +7,10 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { q, rows } = req.query;
-  const limit = rows || 200;
+  const { q } = req.query;
   
   try {
+    // Récupérer 100 marchés (limite max de l'API)
     const url = `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=100`;
     
     const response = await fetch(url);
@@ -31,7 +31,12 @@ export default async function handler(req, res) {
       const searchTerms = q.toLowerCase().split(' ').filter(t => t.length > 2);
       results = results.filter(m => {
         const objet = (m.objet || '').toLowerCase();
-        return searchTerms.some(term => objet.includes(term));
+        const acheteur = (m.acheteur_nom || '').toLowerCase();
+        const lieu = (m.lieu_execution_nom || '').toLowerCase();
+        
+        // Chercher dans objet, acheteur ET lieu
+        const searchText = `${objet} ${acheteur} ${lieu}`;
+        return searchTerms.some(term => searchText.includes(term));
       });
     }
     
@@ -42,38 +47,4 @@ export default async function handler(req, res) {
         titre: m.objet || 'Sans titre',
         montant: parseFloat(m.montant) || 0,
         montantFormate: m.montant 
-          ? `${parseFloat(m.montant).toLocaleString('fr-FR')} €` 
-          : 'Non communiqué',
-        acheteur: m.acheteur_nom || 'Non spécifié',
-        dateNotification: m.date_notification || null,
-        datePublication: m.date_publication_donnees || null,
-        lieuExecution: m.lieu_execution_nom || 'France',
-        niveauDifficulte: classifyForTPE(parseFloat(m.montant) || 0),
-        lien: `https://data.economie.gouv.fr/explore/dataset/decp-v3-marches-valides/table/?refine.id_marche=${m.id_marche || ''}`
-      }))
-    };
-    
-    return res.status(200).json(formatted);
-    
-  } catch (error) {
-    return res.status(500).json({ 
-      error: 'Erreur serveur',
-      message: error.message,
-      stack: error.stack
-    });
-  }
-}
-
-function classifyForTPE(montant) {
-  if (!montant) {
-    return { niveau: 'Inconnu', color: 'gray', badge: '❓', conseil: 'Montant NC' };
-  }
-  if (montant < 25000) {
-    return { niveau: 'Débutant', color: 'green', badge: '🟢', conseil: 'Idéal pour démarrer' };
-  }
-  if (montant < 100000) {
-    return { niveau: 'Intermédiaire', color: 'orange', badge: '🟠', conseil: 'Quelques références demandées' };
-  }
-  return { niveau: 'Expert', color: 'red', badge: '🔴', conseil: 'Grandes entreprises' };
-}
-
+          ? `${parseFloat(m.montant).toLocaleString('fr-FR

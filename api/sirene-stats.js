@@ -1,61 +1,42 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const { secteur, region, page = 1 } = req.query;
-  
   try {
-    // Mapping codes NAF vers mots-clés simples
-    const secteurKeywords = {
-      '62': 'informatique',
-      '47': 'commerce',
-      '56': 'restauration',
-      '41': 'construction',
-      '43': 'travaux',
-      '68': 'immobilier',
-      '70': 'conseil',
-      '73': 'publicité',
-      '85': 'santé'
-    };
+    const { secteur, region } = req.query;
     
-    // Mapping codes postaux vers villes
-    const regionNames = {
-      '75': 'paris',
-      '69': 'lyon',
-      '13': 'marseille',
-      '31': 'toulouse',
-      '33': 'bordeaux',
-      '44': 'nantes',
-      '59': 'lille',
-      '67': 'strasbourg',
-      '06': 'nice',
-      '34': 'montpellier',
-      '35': 'rennes',
-      '38': 'grenoble'
-    };
-    
-    // Construction recherche simple
-    let searchTerms = [];
-    
-    if (secteur) {
-      // Prendre les 2 premiers chiffres du code NAF
-      const codeBase = secteur.substring(0, 2);
-      const keyword = secteurKeywords[codeBase] || 'entreprise';
-      searchTerms.push(keyword);
+    let query = 'france';
+    if (secteur && region) {
+      query = `informatique ${region === '75' ? 'paris' : 'france'}`;
+    } else if (secteur) {
+      query = 'informatique';
+    } else if (region) {
+      query = region === '75' ? 'paris' : 'france';
     }
     
-    if (region) {
-      const regionCode = region.substring(0, 2);
-      const regionName = regionNames[regionCode] || '';
-      if (regionName) {
-        searchTerms.push(regionName);
-      }
-    }
+    const url = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(query)}&per_page=25`;
+    const response = await fetch(url);
+    const data = await response.json();
     
-    const query = searchTerms.length > 0 ? searchTerms.join(' ') : 'france';
-    const url = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(query)}&page=${
+    const entreprises = (data.results || []).map(e => ({
+      siren: e.siren,
+      nom: e.nom_complet || e.nom_raison_sociale,
+      secteur: e.activite_principale,
+      ville: e.siege?.libelle_commune,
+      codePostal: e.siege?.code_postal,
+      region: e.siege?.libelle_region
+    }));
+    
+    return res.status(200).json({
+      total: entreprises.length,
+      entreprises
+    });
+    
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}

@@ -1,5 +1,8 @@
 {
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" }
-  ]
+  ],
+  "env": {
+    "NEWSAPI_KEY": "267b0286294447f4b8f17017408badaf"
+  }
 }

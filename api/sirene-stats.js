@@ -7,64 +7,58 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { secteur, region, type } = req.query;
+  const { secteur, region, page = 1 } = req.query;
   
   try {
-    let url = 'https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/sirene-v3/records?limit=100';
+    // API Recherche Entreprises - Toute la France, gratuit, sans clé
+    let searchParams = [];
     
-    // Filtrer par secteur (code NAF)
     if (secteur) {
-      url += `&where=activiteprincipaleunitelegale:"${secteur}"`;
+      searchParams.push(`activite_principale:${secteur}*`);
     }
     
-    // Filtrer par région (code département)
     if (region) {
-      url += `${secteur ? ' AND ' : '&where='}codeCommuneEtablissement like "${region}%"`;
+      searchParams.push(`code_postal:${region}*`);
     }
     
-    // Stats agrégées
-    if (type === 'stats') {
-      url += '&select=count(*) as total&group_by=trancheeffectifsunitelegale';
-    }
+    const query = searchParams.join(' AND ') || '*';
+    const url = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(query)}&page=${page}&per_page=50`;
     
     const response = await fetch(url);
     
     if (!response.ok) {
       const errorText = await response.text();
       return res.status(response.status).json({ 
-        error: `Open Data Soft ${response.status}`,
+        error: `API Gouv ${response.status}`,
         details: errorText
       });
     }
     
     const data = await response.json();
-    
-    // Formater les résultats
     const results = data.results || [];
     
-    if (type === 'stats') {
-      // Stats agrégées
-      return res.status(200).json({
-        total: data.total_count || 0,
-        repartition: results.map(r => ({
-          tranche: r.trancheeffectifsunitelegale || 'Non renseigné',
-          nombre: r.total || 0
-        }))
-      });
-    }
-    
-    // Liste d'entreprises
+    // Formater les résultats
     return res.status(200).json({
-      total: data.total_count || 0,
-      entreprises: results.slice(0, 20).map(e => ({
+      total: data.total_results || 0,
+      page: data.page || 1,
+      totalPages: data.total_pages || 1,
+      entreprises: results.map(e => ({
         siren: e.siren,
-        nom: e.denominationunitelegale || 'Non renseigné',
-        secteur: e.activiteprincipaleunitelegale,
-        ville: e.libellecommuneetablissement,
-        codePostal: e.codepostaletablissement,
-        effectif: e.trancheeffectifsunitelegale,
-        dateCreation: e.datecreationunitelegale
-      }))
+        nom: e.nom_complet || e.nom_raison_sociale,
+        secteur: e.activite_principale,
+        secteurLibelle: e.libelle_activite_principale,
+        ville: e.siege?.libelle_commune,
+        codePostal: e.siege?.code_postal,
+        region: e.siege?.libelle_region,
+        effectif: e.tranche_effectif_salarie,
+        dateCreation: e.date_creation,
+        etatAdministratif: e.etat_administratif
+      })),
+      stats: {
+        repartitionEffectif: calculerRepartition(results, 'tranche_effectif_salarie'),
+        repartitionRegion: calculerRepartition(results.map(r => ({...r, region: r.siege?.libelle_region})), 'region'),
+        topVilles: calculerTopVilles(results)
+      }
     });
     
   } catch (error) {
@@ -73,4 +67,29 @@ export default async function handler(req, res) {
       message: error.message 
     });
   }
+}
+
+function calculerRepartition(data, champ) {
+  const count = {};
+  data.forEach(item => {
+    const valeur = item[champ] || 'Non renseigné';
+    count[valeur] = (count[valeur] || 0) + 1;
+  });
+  return Object.entries(count)
+    .map(([tranche, nombre]) => ({ tranche, nombre }))
+    .sort((a, b) => b.nombre - a.nombre);
+}
+
+function calculerTopVilles(data) {
+  const count = {};
+  data.forEach(item => {
+    const ville = item.siege?.libelle_commune || 'Non renseigné';
+    if (ville !== 'Non renseigné') {
+      count[ville] = (count[ville] || 0) + 1;
+    }
+  });
+  return Object.entries(count)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([ville, nombre]) => ({ ville, nombre }));
 }

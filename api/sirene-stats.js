@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     }
     
     const query = searchParams.join(' AND ') || '*';
-    const url = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(query)}&page=${page}&per_page=50`;
+    const url = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(query)}&page=${page}&per_page=25`;
     
     const response = await fetch(url);
     

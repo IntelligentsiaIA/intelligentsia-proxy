@@ -10,23 +10,62 @@ export default async function handler(req, res) {
   const { secteur, region, page = 1 } = req.query;
   
   try {
-    // Construction de la recherche textuelle simple
+    // Mapping codes NAF vers mots-clés de recherche
+    const secteurKeywords = {
+      '62.01': 'informatique programmation logiciel',
+      '62.02': 'conseil informatique',
+      '62': 'informatique',
+      '47': 'commerce',
+      '56': 'restauration',
+      '41': 'construction',
+      '43': 'travaux',
+      '68': 'immobilier'
+    };
+    
+    // Mapping codes postaux vers noms de villes/régions
+    const regionNames = {
+      '75': 'paris',
+      '69': 'lyon',
+      '13': 'marseille',
+      '31': 'toulouse',
+      '33': 'bordeaux',
+      '44': 'nantes',
+      '59': 'lille',
+      '67': 'strasbourg',
+      '06': 'nice',
+      '34': 'montpellier',
+      '35': 'rennes',
+      '38': 'grenoble',
+      '76': 'rouen',
+      '21': 'dijon',
+      '45': 'orléans',
+      '2A': 'ajaccio',
+      '2B': 'bastia'
+    };
+    
+    // Construction de la recherche avec mots-clés intelligents
     let searchTerms = [];
     
     if (secteur) {
-      // Chercher par code NAF dans le texte
-      searchTerms.push(secteur);
+      // Chercher le code NAF le plus proche
+      let keyword = secteur;
+      for (let code in secteurKeywords) {
+        if (secteur.startsWith(code)) {
+          keyword = secteurKeywords[code];
+          break;
+        }
+      }
+      searchTerms.push(keyword);
     }
     
     if (region) {
-      // Chercher par code postal
-      searchTerms.push(region);
+      const regionCode = region.substring(0, 2).toUpperCase();
+      const regionName = regionNames[regionCode] || regionNames[region] || region;
+      searchTerms.push(regionName);
     }
     
     const query = searchTerms.length > 0 ? searchTerms.join(' ') : 'france';
     const url = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(query)}&page=${page}&per_page=25`;
-    
-    console.log('🔍 URL API:', url);
     
     const response = await fetch(url);
     
@@ -41,16 +80,21 @@ export default async function handler(req, res) {
     const data = await response.json();
     let results = data.results || [];
     
-    // Filtrer côté serveur si nécessaire
+    // Filtrage souple côté serveur
     if (secteur && results.length > 0) {
-      results = results.filter(e => 
-        e.activite_principale && e.activite_principale.startsWith(secteur)
-      );
+      const secteurClean = secteur.replace('.', '');
+      results = results.filter(e => {
+        if (!e.activite_principale) return false;
+        const apClean = e.activite_principale.replace('.', '');
+        return apClean.startsWith(secteurClean.substring(0, 2));
+      });
     }
     
     if (region && results.length > 0) {
+      const regionPrefix = region.substring(0, 2);
       results = results.filter(e => 
-        e.siege?.code_postal && e.siege.code_postal.startsWith(region)
+        e.siege?.code_postal && 
+        e.siege.code_postal.startsWith(regionPrefix)
       );
     }
     
@@ -58,7 +102,9 @@ export default async function handler(req, res) {
     return res.status(200).json({
       total: results.length,
       totalAPI: data.total_results || 0,
-      page: data.page || 1,
+      page: parseInt(page),
+      totalPages: Math.ceil((data.total_results || 0) / 25),
+      recherche: query,
       entreprises: results.map(e => ({
         siren: e.siren,
         nom: e.nom_complet || e.nom_raison_sociale,
@@ -68,45 +114,4 @@ export default async function handler(req, res) {
         codePostal: e.siege?.code_postal,
         region: e.siege?.libelle_region,
         effectif: e.tranche_effectif_salarie,
-        dateCreation: e.date_creation,
-        etatAdministratif: e.etat_administratif
-      })),
-      stats: {
-        repartitionEffectif: calculerRepartition(results, 'tranche_effectif_salarie'),
-        repartitionRegion: calculerRepartition(results.map(r => ({...r, region: r.siege?.libelle_region})), 'region'),
-        topVilles: calculerTopVilles(results)
-      }
-    });
-    
-  } catch (error) {
-    return res.status(500).json({ 
-      error: 'Erreur serveur',
-      message: error.message 
-    });
-  }
-}
-
-function calculerRepartition(data, champ) {
-  const count = {};
-  data.forEach(item => {
-    const valeur = item[champ] || 'Non renseigné';
-    count[valeur] = (count[valeur] || 0) + 1;
-  });
-  return Object.entries(count)
-    .map(([tranche, nombre]) => ({ tranche, nombre }))
-    .sort((a, b) => b.nombre - a.nombre);
-}
-
-function calculerTopVilles(data) {
-  const count = {};
-  data.forEach(item => {
-    const ville = item.siege?.libelle_commune || 'Non renseigné';
-    if (ville !== 'Non renseigné') {
-      count[ville] = (count[ville] || 0) + 1;
-    }
-  });
-  return Object.entries(count)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([ville, nombre]) => ({ ville, nombre }));
-}
+        effectifLibelle: getEffectifLibelle(e.tranche_effectif_salarie

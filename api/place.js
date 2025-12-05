@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
   
@@ -10,23 +9,16 @@ export default async function handler(req, res) {
   try {
     const { q } = req.query;
     
-    // Appel API
-    const url = 'https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=100';
+    // Utiliser search() de l'API si q fourni
+    const url = q
+      ? `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=100&where=search(objet,"${encodeURIComponent(q)}")`
+      : `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=100`;
+    
     const response = await fetch(url);
     const data = await response.json();
     
-    let results = data.results || [];
+    const results = data.results || [];
     
-    // Filtre simple
-    if (q) {
-      const keywords = q.toLowerCase().split(' ');
-      results = results.filter(m => {
-        const text = `${m.objet || ''} ${m.acheteur_nom || ''} ${m.lieu_execution_nom || ''}`.toLowerCase();
-        return keywords.some(k => text.includes(k));
-      });
-    }
-    
-    // Format
     const marches = results.map(m => ({
       id: m.id_marche || '',
       titre: m.objet || 'Sans titre',

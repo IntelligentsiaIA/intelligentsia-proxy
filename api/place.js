@@ -12,7 +12,8 @@ export default async function handler(req, res) {
   
   try {
     // Nouvelle API v3 (dataset actif)
-    const url = `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=${limit}&order_by=date_notification DESC`;
+    // Supprimer temporairement le order_by
+    const url = `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=${limit}`;
     
     const response = await fetch(url);
     
@@ -76,3 +77,4 @@ function classifyForTPE(montant) {
   }
   return { niveau: 'Expert', color: 'red', badge: '🔴', conseil: 'Grandes entreprises' };
 }
+

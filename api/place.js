@@ -1,50 +1,53 @@
 export default async function handler(req, res) {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const { q } = req.query;
-  
   try {
-    // Récupérer 100 marchés (limite max de l'API)
-    const url = `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=100`;
+    const { q } = req.query;
     
+    // Appel API
+    const url = 'https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=100';
     const response = await fetch(url);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(500).json({ 
-        error: `API PLACE ${response.status}`,
-        details: errorText
-      });
-    }
-    
     const data = await response.json();
+    
     let results = data.results || [];
     
-    // Filtrer côté serveur si paramètre q fourni
+    // Filtre simple
     if (q) {
-      const searchTerms = q.toLowerCase().split(' ').filter(t => t.length > 2);
+      const keywords = q.toLowerCase().split(' ');
       results = results.filter(m => {
-        const objet = (m.objet || '').toLowerCase();
-        const acheteur = (m.acheteur_nom || '').toLowerCase();
-        const lieu = (m.lieu_execution_nom || '').toLowerCase();
-        
-        // Chercher dans objet, acheteur ET lieu
-        const searchText = `${objet} ${acheteur} ${lieu}`;
-        return searchTerms.some(term => searchText.includes(term));
+        const text = `${m.objet || ''} ${m.acheteur_nom || ''} ${m.lieu_execution_nom || ''}`.toLowerCase();
+        return keywords.some(k => text.includes(k));
       });
     }
     
-    const formatted = {
-      total: results.length,
-      marches: results.map(m => ({
-        id: m.id_marche || m.id || '',
-        titre: m.objet || 'Sans titre',
-        montant: parseFloat(m.montant) || 0,
-        montantFormate: m.montant 
-          ? `${parseFloat(m.montant).toLocaleString('fr-FR
+    // Format
+    const marches = results.map(m => ({
+      id: m.id_marche || '',
+      titre: m.objet || 'Sans titre',
+      montant: parseFloat(m.montant) || 0,
+      montantFormate: m.montant ? `${parseFloat(m.montant).toLocaleString('fr-FR')} €` : 'NC',
+      acheteur: m.acheteur_nom || 'Non spécifié',
+      lieuExecution: m.lieu_execution_nom || 'France',
+      niveauDifficulte: getMontantLevel(parseFloat(m.montant) || 0),
+      lien: `https://data.economie.gouv.fr/explore/dataset/decp-v3-marches-valides/table/`
+    }));
+    
+    return res.status(200).json({ total: marches.length, marches });
+    
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+function getMontantLevel(m) {
+  if (!m) return { niveau: 'Inconnu', color: 'gray', badge: '❓', conseil: 'NC' };
+  if (m < 25000) return { niveau: 'Débutant', color: 'green', badge: '🟢', conseil: 'TPE' };
+  if (m < 100000) return { niveau: 'Intermédiaire', color: 'orange', badge: '🟠', conseil: 'PME' };
+  return { niveau: 'Expert', color: 'red', badge: '🔴', conseil: 'Grandes entreprises' };
+}

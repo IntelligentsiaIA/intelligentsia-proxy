@@ -10,43 +10,47 @@ export default async function handler(req, res) {
   const { q, rows } = req.query;
   const limit = rows || 20;
   
-  if (!q) {
-    return res.status(400).json({ error: 'Paramètre q requis' });
-  }
-  
   try {
-    const url = `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp_augmente/records?limit=${limit}&order_by=date_publication%20DESC`;
+    // Nouvelle API v3 (dataset actif)
+    const url = `https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records?limit=${limit}&order_by=date_notification DESC`;
     
     const response = await fetch(url);
     
     if (!response.ok) {
-      return res.status(500).json({ error: `API PLACE ${response.status}` });
+      const errorText = await response.text();
+      return res.status(500).json({ 
+        error: `API PLACE ${response.status}`,
+        details: errorText
+      });
     }
     
     const data = await response.json();
     let results = data.results || [];
     
-    // Filtrer côté serveur
-    const searchLower = q.toLowerCase();
-    results = results.filter(m => {
-      const objet = (m.objet || '').toLowerCase();
-      return objet.includes(searchLower);
-    });
+    // Filtrer côté serveur si paramètre q fourni
+    if (q) {
+      const searchLower = q.toLowerCase();
+      results = results.filter(m => {
+        const objet = (m.objet || '').toLowerCase();
+        return objet.includes(searchLower);
+      });
+    }
     
     const formatted = {
       total: results.length,
       marches: results.map(m => ({
-        id: m.id || '',
+        id: m.id_marche || m.id || '',
         titre: m.objet || 'Sans titre',
         montant: parseFloat(m.montant) || 0,
         montantFormate: m.montant 
           ? `${parseFloat(m.montant).toLocaleString('fr-FR')} €` 
           : 'Non communiqué',
         acheteur: m.acheteur_nom || 'Non spécifié',
-        datePublication: m.date_publication || null,
-        lieuExecution: m.lieu_execution_type_nom || 'France',
+        dateNotification: m.date_notification || null,
+        datePublication: m.date_publication_donnees || null,
+        lieuExecution: m.lieu_execution_nom || 'France',
         niveauDifficulte: classifyForTPE(parseFloat(m.montant) || 0),
-        lien: `https://data.economie.gouv.fr/explore/dataset/decp_augmente/table/?refine.id=${m.id || ''}`
+        lien: `https://data.economie.gouv.fr/explore/dataset/decp-v3-marches-valides/table/?refine.id_marche=${m.id_marche || ''}`
       }))
     };
     

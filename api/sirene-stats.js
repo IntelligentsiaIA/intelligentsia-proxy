@@ -10,19 +10,23 @@ export default async function handler(req, res) {
   const { secteur, region, page = 1 } = req.query;
   
   try {
-    // API Recherche Entreprises - Toute la France, gratuit, sans clé
-    let searchParams = [];
+    // Construction de la recherche textuelle simple
+    let searchTerms = [];
     
     if (secteur) {
-      searchParams.push(`activite_principale:${secteur}*`);
+      // Chercher par code NAF dans le texte
+      searchTerms.push(secteur);
     }
     
     if (region) {
-      searchParams.push(`code_postal:${region}*`);
+      // Chercher par code postal
+      searchTerms.push(region);
     }
     
-    const query = searchParams.join(' AND ') || '*';
+    const query = searchTerms.length > 0 ? searchTerms.join(' ') : 'france';
     const url = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(query)}&page=${page}&per_page=25`;
+    
+    console.log('🔍 URL API:', url);
     
     const response = await fetch(url);
     
@@ -35,13 +39,26 @@ export default async function handler(req, res) {
     }
     
     const data = await response.json();
-    const results = data.results || [];
+    let results = data.results || [];
+    
+    // Filtrer côté serveur si nécessaire
+    if (secteur && results.length > 0) {
+      results = results.filter(e => 
+        e.activite_principale && e.activite_principale.startsWith(secteur)
+      );
+    }
+    
+    if (region && results.length > 0) {
+      results = results.filter(e => 
+        e.siege?.code_postal && e.siege.code_postal.startsWith(region)
+      );
+    }
     
     // Formater les résultats
     return res.status(200).json({
-      total: data.total_results || 0,
+      total: results.length,
+      totalAPI: data.total_results || 0,
       page: data.page || 1,
-      totalPages: data.total_pages || 1,
       entreprises: results.map(e => ({
         siren: e.siren,
         nom: e.nom_complet || e.nom_raison_sociale,

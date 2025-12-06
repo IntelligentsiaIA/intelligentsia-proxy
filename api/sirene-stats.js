@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // ✅ CORS headers EN PREMIER
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -11,65 +11,133 @@ export default async function handler(req, res) {
   const { secteur, region, limit = 10, page = 1 } = req.query;
   
   try {
-    // Construction query intelligente
-    const searchTerms = [];
-    
-    // Mapping secteurs vers mots-clés larges
-    const secteurMap = {
-      'restauration': 'restaurant',
-      'tech': 'informatique',
-      'commerce': 'commerce',
-      'batiment': 'construction',
-      'sante': 'santé',
-      'services': 'service'
+    // Mapping régions vers départements
+    const regionDepts = {
+      'hauts-de-france': '59',
+      'ile-de-france': '75',
+      'normandie': '76',
+      'nouvelle-aquitaine': '33',
+      'occitanie': '31',
+      'auvergne-rhone-alpes': '69',
+      'grand-est': '67',
+      'bourgogne-franche-comte': '21',
+      'bretagne': '35',
+      'centre-val-de-loire': '45',
+      'pays-de-la-loire': '44',
+      'provence-alpes-cote-azur': '13'
     };
     
-    const secteurQuery = secteurMap[secteur?.toLowerCase()] || secteur || '';
-    if (secteurQuery) searchTerms.push(secteurQuery);
+    // Construction query simple
+    let searchQuery = '';
+    if (secteur) {
+      // Simplifie le secteur (enlève "Activités pour la" etc)
+      const secteurSimple = secteur
+        .toLowerCase()
+        .replace(/activités pour la /gi, '')
+        .replace(/activités /gi, '')
+        .replace(/ humaine/gi, '');
+      searchQuery += secteurSimple;
+    }
     
-    // Mapping régions vers départements principaux
-    const regionMap = {
-      'hauts-de-france': '59 62 80 02 60', // Nord, Pas-de-Calais, Somme, Aisne, Oise
-      'ile-de-france': '75 92 93 94 77 78 91 95',
-      'normandie': '14 27 50 61 76',
-      'nouvelle-aquitaine': '16 17 19 23 24 33 40 47 64 79 86 87',
-      'occitanie': '09 11 12 30 31 32 34 46 48 65 66 81 82',
-      'auvergne-rhone-alpes': '01 03 07 15 26 38 42 43 63 69 73 74',
-      'grand-est': '08 10 51 52 54 55 57 67 68 88',
-      'bourgogne-franche-comte': '21 25 39 58 70 71 89 90',
-      'bretagne': '22 29 35 56',
-      'centre-val-de-loire': '18 28 36 37 41 45',
-      'pays-de-la-loire': '44 49 53 72 85',
-      'provence-alpes-cote-azur': '04 05 06 13 83 84'
-    };
-    
-    const regionQuery = regionMap[region?.toLowerCase()] || region || '';
-    
-    // Appel API avec per_page max (25) et gestion pagination
+    // API Gouv URL
     const perPage = Math.min(parseInt(limit) || 25, 25);
-    const apiUrl = new URL('https://recherche-entreprises.api.gouv.fr/search');
+    const apiUrl = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(searchQuery)}&per_page=${perPage}&page=${page}`;
     
-    // Query textuelle large
-    if (searchTerms.length > 0) {
-      apiUrl.searchParams.append('q', searchTerms.join(' '));
-    }
+    console.log('[Sirene] URL:', apiUrl);
     
-    // Filtres structurés
-    if (regionQuery) {
-      // Cherche dans tous les départements de la région
-      const depts = regionQuery.split(' ');
-      apiUrl.searchParams.append('code_postal', depts[0]); // Utilise le 1er dept comme base
-    }
-    
-    apiUrl.searchParams.append('per_page', perPage.toString());
-    apiUrl.searchParams.append('page', page.toString());
-    
-    console.log('🔍 [Sirene Proxy] URL:', apiUrl.toString());
-    
-    const response = await fetch(apiUrl.toString());
+    const response = await fetch(apiUrl);
     
     if (!response.ok) {
-      throw new Error(`API Gouv error: ${response.status}`);
+      throw new Error(`API error ${response.status}`);
     }
     
     const data = await response.json();
+    
+    // Parse entreprises
+    const entreprises = (data.results || []).map(e => ({
+      siren: e.siren,
+      nom: e.nom_complet || e.nom_raison_sociale || 'Non renseigné',
+      secteur: e.activite_principale || 'Non renseigné',
+      ville: e.siege?.libelle_commune || 'Non renseignée',
+      codePostal: e.siege?.code_postal || '',
+      region: e.siege?.libelle_region || '',
+      dateCreation: e.date_creation || e.date_debut_activite || null,
+      effectif: e.tranche_effectif_salarie || null
+    }));
+    
+    // Filtre région côté serveur si demandé
+    let filtered = entreprises;
+    if (region) {
+      const regionLower = region.toLowerCase();
+      const dept = regionDepts[regionLower];
+      
+      if (dept) {
+        filtered = entreprises.filter(e => 
+          e.codePostal?.startsWith(dept) || 
+          e.region?.toLowerCase().includes(regionLower.replace(/-/g, ' '))
+        );
+      } else {
+        // Filtre textuel sur nom région
+        filtered = entreprises.filter(e => 
+          e.region?.toLowerCase().includes(regionLower.replace(/-/g, ' '))
+        );
+      }
+    }
+    
+    // Calcul stats basiques
+    const stats = {
+      repartitionEffectif: {},
+      topVilles: []
+    };
+    
+    // Répartition effectifs
+    const effectifLabels = {
+      '00': 'TPE (0 salarié)',
+      '01': 'TPE (1-2 salariés)',
+      '02': 'TPE (3-5 salariés)',
+      '03': 'TPE (6-9 salariés)',
+      '11': 'PME (10-19 salariés)',
+      '12': 'PME (20-49 salariés)',
+      '21': 'PME (50-99 salariés)',
+      '22': 'PME (100-199 salariés)',
+      '31': 'ETI (200-249 salariés)',
+      '32': 'ETI (250-499 salariés)'
+    };
+    
+    filtered.forEach(e => {
+      const label = effectifLabels[e.effectif] || 'Non renseigné';
+      stats.repartitionEffectif[label] = (stats.repartitionEffectif[label] || 0) + 1;
+    });
+    
+    // Top villes
+    const villesCount = {};
+    filtered.forEach(e => {
+      if (e.ville && e.ville !== 'Non renseignée') {
+        villesCount[e.ville] = (villesCount[e.ville] || 0) + 1;
+      }
+    });
+    
+    stats.topVilles = Object.entries(villesCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([ville, nombre]) => ({ ville, nombre }));
+    
+    return res.status(200).json({
+      total: data.total_results || 0,
+      entreprises: filtered,
+      stats
+    });
+    
+  } catch (error) {
+    console.error('[Sirene] Error:', error.message);
+    return res.status(500).json({ 
+      error: error.message,
+      total: 0,
+      entreprises: [],
+      stats: {
+        repartitionEffectif: {},
+        topVilles: []
+      }
+    });
+  }
+}

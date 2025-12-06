@@ -1,35 +1,44 @@
-// api/sirene-stats.js (Vercel proxy)
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  // ✅ CORS headers EN PREMIER
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
-  const { q, secteur, region, limit = 10, page = 1 } = req.query;
-  const url = new URL('https://recherche-entreprises.api.gouv.fr/search');
-  if (q) url.searchParams.append('q', q);
-  if (secteur) url.searchParams.append('activite', secteur); // Mapping INSEE vers mots-clés
-  if (region) url.searchParams.append('departement', region); // Filtre géo (région → dépt principal ou liste)
-  url.searchParams.append('nombre', limit.toString());
-  url.searchParams.append('page', page.toString());
-
+  const { secteur, region, limite = 10, page = 1 } = req.query;
+  
   try {
-    const response = await fetch(url.toString());
+    const searchTerms = [];
+    if (secteur) searchTerms.push(secteur);
+    if (region) searchTerms.push(region);
+    
+    const url = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(searchTerms.join(' '))}&page=${page}&per_page=${Math.min(limite, 25)}`;
+    
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`API error: ${response.status}`);
+    
     const data = await response.json();
-    res.status(200).json({
-      total: data.total ?? 0,
-      entreprises: data.entreprises ?? [],
-      // Stats sectorielles agrégées (exemple simple, à enrichir frontend)
+    
+    return res.status(200).json({
+      total: data.total_results || 0,
+      entreprises: (data.results || []).map(e => ({
+        siren: e.siren,
+        nom: e.nom_complet || e.nom_raison_sociale,
+        secteur: e.activite_principale,
+        ville: e.siege?.libelle_commune,
+        codePostal: e.siege?.code_postal,
+        region: e.siege?.libelle_region
+      })),
       stats: {
-        parSecteur: data.entreprises?.reduce((acc, ent) => {
-          acc[ent.secteur] = (acc[ent.secteur] || 0) + 1;
-          return acc;
-        }, {}),
-        parRegion: data.entreprises?.reduce((acc, ent) => {
-          acc[ent.region] = (acc[ent.region] || 0) + 1;
-          return acc;
-        }, {})
+        parSecteur: {},
+        parRegion: {}
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Sirene error:', error);
+    return res.status(500).json({ error: error.message });
   }
 }

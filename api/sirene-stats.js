@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // CORS headers
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -8,136 +8,108 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { secteur, region, limit = 10, page = 1 } = req.query;
-  
   try {
-    // Mapping régions vers départements
-    const regionDepts = {
-      'hauts-de-france': '59',
-      'ile-de-france': '75',
-      'normandie': '76',
-      'nouvelle-aquitaine': '33',
-      'occitanie': '31',
-      'auvergne-rhone-alpes': '69',
-      'grand-est': '67',
-      'bourgogne-franche-comte': '21',
-      'bretagne': '35',
-      'centre-val-de-loire': '45',
-      'pays-de-la-loire': '44',
-      'provence-alpes-cote-azur': '13'
-    };
+    const { secteur = '', region = '', limit = '10', page = '1' } = req.query;
     
-    // Construction query simple
-    let searchQuery = '';
-    if (secteur) {
-      // Simplifie le secteur (enlève "Activités pour la" etc)
-      const secteurSimple = secteur
-        .toLowerCase()
-        .replace(/activités pour la /gi, '')
-        .replace(/activités /gi, '')
-        .replace(/ humaine/gi, '');
-      searchQuery += secteurSimple;
-    }
+    // Query simple
+    let q = secteur.toLowerCase();
     
-    // API Gouv URL
-    const perPage = Math.min(parseInt(limit) || 25, 25);
-    const apiUrl = `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(searchQuery)}&per_page=${perPage}&page=${page}`;
+    // Nettoyage secteur
+    q = q.replace(/activités pour la /gi, '');
+    q = q.replace(/activités /gi, '');
+    q = q.replace(/ humaine/gi, '');
     
-    console.log('[Sirene] URL:', apiUrl);
+    // URL API Gouv
+    const perPage = Math.min(parseInt(limit), 25);
+    const apiUrl = new URL('https://recherche-entreprises.api.gouv.fr/search');
+    apiUrl.searchParams.set('q', q);
+    apiUrl.searchParams.set('per_page', perPage.toString());
+    apiUrl.searchParams.set('page', page);
     
-    const response = await fetch(apiUrl);
+    // Fetch
+    const response = await fetch(apiUrl.toString());
     
     if (!response.ok) {
-      throw new Error(`API error ${response.status}`);
+      throw new Error('API Gouv error ' + response.status);
     }
     
     const data = await response.json();
     
-    // Parse entreprises
-    const entreprises = (data.results || []).map(e => ({
-      siren: e.siren,
-      nom: e.nom_complet || e.nom_raison_sociale || 'Non renseigné',
-      secteur: e.activite_principale || 'Non renseigné',
-      ville: e.siege?.libelle_commune || 'Non renseignée',
-      codePostal: e.siege?.code_postal || '',
-      region: e.siege?.libelle_region || '',
-      dateCreation: e.date_creation || e.date_debut_activite || null,
-      effectif: e.tranche_effectif_salarie || null
-    }));
+    // Parse minimal
+    const entreprises = [];
+    for (const e of (data.results || [])) {
+      entreprises.push({
+        siren: e.siren || '',
+        nom: e.nom_complet || e.nom_raison_sociale || '',
+        secteur: e.activite_principale || '',
+        ville: (e.siege && e.siege.libelle_commune) || '',
+        codePostal: (e.siege && e.siege.code_postal) || '',
+        region: (e.siege && e.siege.libelle_region) || '',
+        dateCreation: e.date_creation || e.date_debut_activite || null,
+        effectif: e.tranche_effectif_salarie || null
+      });
+    }
     
-    // Filtre région côté serveur si demandé
+    // Filtre région post-fetch
     let filtered = entreprises;
     if (region) {
-      const regionLower = region.toLowerCase();
-      const dept = regionDepts[regionLower];
-      
-      if (dept) {
-        filtered = entreprises.filter(e => 
-          e.codePostal?.startsWith(dept) || 
-          e.region?.toLowerCase().includes(regionLower.replace(/-/g, ' '))
-        );
-      } else {
-        // Filtre textuel sur nom région
-        filtered = entreprises.filter(e => 
-          e.region?.toLowerCase().includes(regionLower.replace(/-/g, ' '))
-        );
+      const regionLower = region.toLowerCase().replace(/-/g, ' ');
+      filtered = entreprises.filter(e => {
+        const eRegion = (e.region || '').toLowerCase();
+        return eRegion.includes(regionLower);
+      });
+    }
+    
+    // Stats basiques
+    const villesCount = {};
+    for (const e of filtered) {
+      if (e.ville) {
+        villesCount[e.ville] = (villesCount[e.ville] || 0) + 1;
       }
     }
     
-    // Calcul stats basiques
-    const stats = {
-      repartitionEffectif: {},
-      topVilles: []
-    };
-    
-    // Répartition effectifs
-    const effectifLabels = {
-      '00': 'TPE (0 salarié)',
-      '01': 'TPE (1-2 salariés)',
-      '02': 'TPE (3-5 salariés)',
-      '03': 'TPE (6-9 salariés)',
-      '11': 'PME (10-19 salariés)',
-      '12': 'PME (20-49 salariés)',
-      '21': 'PME (50-99 salariés)',
-      '22': 'PME (100-199 salariés)',
-      '31': 'ETI (200-249 salariés)',
-      '32': 'ETI (250-499 salariés)'
-    };
-    
-    filtered.forEach(e => {
-      const label = effectifLabels[e.effectif] || 'Non renseigné';
-      stats.repartitionEffectif[label] = (stats.repartitionEffectif[label] || 0) + 1;
-    });
-    
-    // Top villes
-    const villesCount = {};
-    filtered.forEach(e => {
-      if (e.ville && e.ville !== 'Non renseignée') {
-        villesCount[e.ville] = (villesCount[e.ville] || 0) + 1;
-      }
-    });
-    
-    stats.topVilles = Object.entries(villesCount)
+    const topVilles = Object.entries(villesCount)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([ville, nombre]) => ({ ville, nombre }));
     
+    const effectifCount = {};
+    for (const e of filtered) {
+      const eff = e.effectif || '00';
+      effectifCount[eff] = (effectifCount[eff] || 0) + 1;
+    }
+    
+    // Regroupe TPE/PME/ETI
+    let tpe = 0;
+    let pme = 0;
+    let eti = 0;
+    
+    for (const [code, count] of Object.entries(effectifCount)) {
+      if (['00', '01', '02', '03'].includes(code)) tpe += count;
+      else if (['11', '12', '21', '22'].includes(code)) pme += count;
+      else if (['31', '32', '41', '42'].includes(code)) eti += count;
+    }
+    
     return res.status(200).json({
       total: data.total_results || 0,
       entreprises: filtered,
-      stats
+      stats: {
+        repartitionEffectif: {
+          'TPE': tpe,
+          'PME': pme,
+          'ETI': eti
+        },
+        topVilles: topVilles
+      }
     });
     
   } catch (error) {
-    console.error('[Sirene] Error:', error.message);
     return res.status(500).json({ 
       error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       total: 0,
       entreprises: [],
-      stats: {
-        repartitionEffectif: {},
-        topVilles: []
-      }
+      stats: {}
     });
   }
 }

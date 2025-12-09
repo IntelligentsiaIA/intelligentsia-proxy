@@ -133,4 +133,11 @@ export default async function handler(req, res) {
     });
     
   } catch (error) {
-    return res.status(500).json({
+    return res.status(500).json({ 
+      error: error.message,
+      total: 0,
+      entreprises: [],
+      stats: {}
+    });
+  }
+}

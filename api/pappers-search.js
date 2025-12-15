@@ -44,23 +44,31 @@ export default async function handler(req, res) {
     key.includes('PAPPERS') || key.includes('API') || key.includes('KEY')
   );
   console.log('🐛 [DEBUG] Variables env qui contiennent PAPPERS/API/KEY:', envKeys);
-  console.log('🐛 [DEBUG] PAPPERS_API_KEY existe ?', !!process.env.PAPPERS_API_KEY);
-  console.log('🐛 [DEBUG] Longueur clé:', process.env.PAPPERS_API_KEY?.length || 0);
 
   try {
     const { secteur, region, limite = 100, page = 1 } = req.query;
     
-    // Récupérer la clé depuis les variables d'environnement Vercel
-    const PAPPERS_KEY = process.env.PAPPERS_API_KEY;
+    // 🔧 Essaie plusieurs noms de variables (workaround Vercel)
+    const PAPPERS_KEY = process.env.PAPPERS_KEY || 
+                        process.env.PAPPERS_API_KEY || 
+                        process.env.VITE_PAPPERS_API_KEY;
+    
+    console.log('🐛 [DEBUG] PAPPERS_KEY trouvée ?', !!PAPPERS_KEY);
+    console.log('🐛 [DEBUG] Source:', 
+      process.env.PAPPERS_KEY ? 'PAPPERS_KEY' :
+      process.env.PAPPERS_API_KEY ? 'PAPPERS_API_KEY' :
+      process.env.VITE_PAPPERS_API_KEY ? 'VITE_PAPPERS_API_KEY' : 
+      'AUCUNE'
+    );
     
     if (!PAPPERS_KEY) {
-      // Retourne les infos de debug
       return res.status(500).json({ 
         error: 'Clé API Pappers non configurée sur le serveur',
         debug: {
           envKeysFound: envKeys,
           totalEnvVars: Object.keys(process.env).length,
-          nodeVersion: process.version
+          nodeVersion: process.version,
+          checkedVars: ['PAPPERS_KEY', 'PAPPERS_API_KEY', 'VITE_PAPPERS_API_KEY']
         }
       });
     }
@@ -86,7 +94,7 @@ export default async function handler(req, res) {
 
     // Appel à Pappers
     const url = `https://api.pappers.fr/v2/recherche?${params.toString()}`;
-    console.log('🔗 [Pappers Proxy] URL:', url.replace(PAPPERS_KEY, 'HIDDEN'));
+    console.log('🔗 [Pappers Proxy] Appel API Pappers');
     
     const response = await fetch(url);
 
@@ -126,7 +134,8 @@ export default async function handler(req, res) {
     console.error('❌ [Pappers Proxy]', error.message);
     return res.status(500).json({ 
       error: error.message,
-      source: 'pappers_proxy'
+      source: 'pappers_proxy',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 }

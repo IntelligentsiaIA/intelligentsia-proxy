@@ -3,7 +3,7 @@
  */
 
 const SECTEUR_TO_NAF = {
-  'Restauration': '56.x',
+  'Restauration': '56',
   'Boulangerie': '10.71',
   'Coiffure': '96.02',
   'Commerce': '47',

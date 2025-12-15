@@ -3,12 +3,12 @@
  */
 
 const SECTEUR_TO_NAF = {
-  'Restauration': '56',
-  'Boulangerie': '10.71',
-  'Coiffure': '96.02',
+  'Restauration': '5610A,5610B,5610C',  // Tous les types de restauration
+  'Boulangerie': '1071C',
+  'Coiffure': '9602A,9602B',
   'Commerce': '47',
   'Hébergement': '55',
-  'Construction': '41'
+  'Construction': '41,42,43'
 };
 
 const REGIONS_TO_DEPTS = {

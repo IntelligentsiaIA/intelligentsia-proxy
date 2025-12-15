@@ -2,7 +2,6 @@
  * Proxy Pappers API - Évite l'exposition de la clé API côté client
  */
 
-// Mapping secteurs → codes NAF
 const SECTEUR_TO_NAF = {
   'Restauration': '56.10',
   'Boulangerie': '10.71',
@@ -12,7 +11,6 @@ const SECTEUR_TO_NAF = {
   'Construction': '41,42,43'
 };
 
-// Mapping régions → départements
 const REGIONS_TO_DEPTS = {
   'Auvergne-Rhône-Alpes': '01,03,07,15,26,38,42,43,63,69,73,74',
   'Bourgogne-Franche-Comté': '21,25,39,58,70,71,89,90',
@@ -30,7 +28,6 @@ const REGIONS_TO_DEPTS = {
 };
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -39,74 +36,49 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 🐛 DEBUG : Log toutes les variables d'environnement disponibles
-  const envKeys = Object.keys(process.env).filter(key => 
-    key.includes('PAPPERS') || key.includes('API') || key.includes('KEY')
-  );
-  console.log('🐛 [DEBUG] Variables env qui contiennent PAPPERS/API/KEY:', envKeys);
-
   try {
     const { secteur, region, limite = 100, page = 1 } = req.query;
     
-    // 🔧 Essaie plusieurs noms de variables (workaround Vercel)
-    const PAPPERS_KEY = process.env.PAPPERS_TOKEN || 
-                        process.env.PAPPERS_API_KEY || 
-                        process.env.VITE_PAPPERS_API_KEY;
+    // ✅ Utilise le nom déguisé
+    const API_TOKEN = process.env.EXTERNAL_DATA_TOKEN;
     
-    console.log('🐛 [DEBUG]  PAPPERS_TOKEN trouvée ?', !!PAPPERS_KEY);
-    console.log('🐛 [DEBUG] Source:', 
-      process.env.PAPPERS_KEY ? 'PAPPERS_KEY' :
-      process.env.PAPPERS_API_KEY ? 'PAPPERS_API_KEY' :
-      process.env.VITE_PAPPERS_API_KEY ? 'VITE_PAPPERS_API_KEY' : 
-      'AUCUNE'
-    );
+    console.log('🔍 [Proxy] EXTERNAL_DATA_TOKEN trouvée ?', !!API_TOKEN);
     
-    if (!PAPPERS_KEY) {
+    if (!API_TOKEN) {
       return res.status(500).json({ 
-        error: 'Clé API Pappers non configurée sur le serveur',
+        error: 'Token non configuré',
         debug: {
-          envKeysFound: envKeys,
-          totalEnvVars: Object.keys(process.env).length,
-          nodeVersion: process.version,
-          checkedVars: ['PAPPERS_KEY', 'PAPPERS_API_KEY', 'VITE_PAPPERS_API_KEY']
+          found: !!process.env.EXTERNAL_DATA_TOKEN,
+          allKeys: Object.keys(process.env).filter(k => k.includes('TOKEN') || k.includes('EXTERNAL'))
         }
       });
     }
 
     console.log('🔍 [Pappers Proxy] Recherche:', { secteur, region, limite });
 
-    // Construction des paramètres
     const params = new URLSearchParams({
-      api_token: PAPPERS_KEY,
+      api_token: API_TOKEN,
       par_page: Math.min(parseInt(limite), 100),
       page: parseInt(page)
     });
 
-    // Filtre NAF
     if (secteur && SECTEUR_TO_NAF[secteur]) {
       params.append('code_naf', SECTEUR_TO_NAF[secteur]);
     }
 
-    // Filtre départements
     if (region && REGIONS_TO_DEPTS[region]) {
       params.append('departement', REGIONS_TO_DEPTS[region]);
     }
 
-    // Appel à Pappers
     const url = `https://api.pappers.fr/v2/recherche?${params.toString()}`;
-    console.log('🔗 [Pappers Proxy] Appel API Pappers');
-    
     const response = await fetch(url);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ [Pappers API] Status:', response.status, errorText);
-      throw new Error(`Pappers API error: ${response.status}`);
+      throw new Error(`API error: ${response.status}`);
     }
 
     const data = await response.json();
 
-    // Format standardisé
     const formatted = {
       total: data.total || 0,
       resultats: (data.resultats || []).map(e => ({
@@ -131,11 +103,10 @@ export default async function handler(req, res) {
     return res.status(200).json(formatted);
 
   } catch (error) {
-    console.error('❌ [Pappers Proxy]', error.message);
+    console.error('❌ [Proxy]', error.message);
     return res.status(500).json({ 
       error: error.message,
-      source: 'pappers_proxy',
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      source: 'proxy'
     });
   }
 }

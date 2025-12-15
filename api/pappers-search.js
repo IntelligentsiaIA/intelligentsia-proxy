@@ -48,4 +48,85 @@ export default async function handler(req, res) {
   console.log('🐛 [DEBUG] Longueur clé:', process.env.PAPPERS_API_KEY?.length || 0);
 
   try {
-    const { secteur, region, limite
+    const { secteur, region, limite = 100, page = 1 } = req.query;
+    
+    // Récupérer la clé depuis les variables d'environnement Vercel
+    const PAPPERS_KEY = process.env.PAPPERS_API_KEY;
+    
+    if (!PAPPERS_KEY) {
+      // Retourne les infos de debug
+      return res.status(500).json({ 
+        error: 'Clé API Pappers non configurée sur le serveur',
+        debug: {
+          envKeysFound: envKeys,
+          totalEnvVars: Object.keys(process.env).length,
+          nodeVersion: process.version
+        }
+      });
+    }
+
+    console.log('🔍 [Pappers Proxy] Recherche:', { secteur, region, limite });
+
+    // Construction des paramètres
+    const params = new URLSearchParams({
+      api_token: PAPPERS_KEY,
+      par_page: Math.min(parseInt(limite), 100),
+      page: parseInt(page)
+    });
+
+    // Filtre NAF
+    if (secteur && SECTEUR_TO_NAF[secteur]) {
+      params.append('code_naf', SECTEUR_TO_NAF[secteur]);
+    }
+
+    // Filtre départements
+    if (region && REGIONS_TO_DEPTS[region]) {
+      params.append('departement', REGIONS_TO_DEPTS[region]);
+    }
+
+    // Appel à Pappers
+    const url = `https://api.pappers.fr/v2/recherche?${params.toString()}`;
+    console.log('🔗 [Pappers Proxy] URL:', url.replace(PAPPERS_KEY, 'HIDDEN'));
+    
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ [Pappers API] Status:', response.status, errorText);
+      throw new Error(`Pappers API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Format standardisé
+    const formatted = {
+      total: data.total || 0,
+      resultats: (data.resultats || []).map(e => ({
+        siren: e.siren,
+        siret: e.siege?.siret,
+        nom: e.nom_entreprise,
+        ville: e.siege?.ville,
+        codePostal: e.siege?.code_postal,
+        effectif: e.tranche_effectif_salarie || 'Non renseigné',
+        dateCreation: e.date_creation,
+        ca: e.dernier_ca || null,
+        actif: e.statut_rcs === 'Inscrit',
+        dirigeants: e.representants?.length || 0,
+        capitalSocial: e.capital || null
+      })),
+      source: 'pappers',
+      enriched: true
+    };
+
+    console.log('✅ [Pappers Proxy]', formatted.total, 'entreprises trouvées');
+
+    return res.status(200).json(formatted);
+
+  } catch (error) {
+    console.error('❌ [Pappers Proxy]', error.message);
+    return res.status(500).json({ 
+      error: error.message,
+      source: 'pappers_proxy'
+    });
+  }
+}

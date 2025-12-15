@@ -43,6 +43,7 @@ export default async function handler(req, res) {
     const API_TOKEN = process.env.GOOGLE_PLACES_KEY;
     
     console.log('🧪 [TEST] Utilise GOOGLE_PLACES_KEY comme test:', !!API_TOKEN);
+    console.log('🧪 [DEBUG] Premiers 10 caractères:', API_TOKEN?.substring(0, 10)); 
     
     if (!API_TOKEN) {
       return res.status(500).json({ 

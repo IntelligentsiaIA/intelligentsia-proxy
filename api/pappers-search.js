@@ -49,11 +49,11 @@ export default async function handler(req, res) {
     const { secteur, region, limite = 100, page = 1 } = req.query;
     
     // 🔧 Essaie plusieurs noms de variables (workaround Vercel)
-    const PAPPERS_KEY = process.env.PAPPERS_KEY || 
+    const PAPPERS_KEY = process.env.PAPPERS_TOKEN || 
                         process.env.PAPPERS_API_KEY || 
                         process.env.VITE_PAPPERS_API_KEY;
     
-    console.log('🐛 [DEBUG] PAPPERS_KEY trouvée ?', !!PAPPERS_KEY);
+    console.log('🐛 [DEBUG]  PAPPERS_TOKEN trouvée ?', !!PAPPERS_KEY);
     console.log('🐛 [DEBUG] Source:', 
       process.env.PAPPERS_KEY ? 'PAPPERS_KEY' :
       process.env.PAPPERS_API_KEY ? 'PAPPERS_API_KEY' :

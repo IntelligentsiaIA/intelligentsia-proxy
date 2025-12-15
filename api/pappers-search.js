@@ -40,9 +40,9 @@ export default async function handler(req, res) {
     const { secteur, region, limite = 100, page = 1 } = req.query;
     
     // ✅ Utilise le nom déguisé
-    const API_TOKEN = process.env.EXTERNAL_DATA_TOKEN;
+    const API_TOKEN = process.env.GOOGLE_PLACES_KEY;
     
-    console.log('🔍 [Proxy] EXTERNAL_DATA_TOKEN trouvée ?', !!API_TOKEN);
+    console.log('🧪 [TEST] Utilise GOOGLE_PLACES_KEY comme test:', !!API_TOKEN);
     
     if (!API_TOKEN) {
       return res.status(500).json({ 

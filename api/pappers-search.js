@@ -39,10 +39,9 @@ export default async function handler(req, res) {
   try {
     const { secteur, region, limite = 100, page = 1 } = req.query;
     
-    const API_TOKEN = process.env.EXTERNAL_DATA_TOKEN;
+    const API_TOKEN = process.env.PAPPERS_API_KEY;
 
-    console.log('🔑 [PROD] Utilise EXTERNAL_DATA_TOKEN');
-    console.log('🔑 [DEBUG] Premiers 10 caractères:', API_TOKEN?.substring(0, 10)); 
+    console.log('🎉 [PROD] PAPPERS_API_KEY trouvée ?', !!API_TOKEN);
     
     if (!API_TOKEN) {
       return res.status(500).json({ 

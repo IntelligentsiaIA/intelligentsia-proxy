@@ -3,12 +3,111 @@
  */
 
 const SECTEUR_TO_NAF = {
-  'Restauration': '5610A,5610B,5610C',  // Tous les types de restauration
-  'Boulangerie': '1071C',
-  'Coiffure': '9602A,9602B',
-  'Commerce': '47',
-  'Hébergement': '55',
-  'Construction': '41,42,43'
+  // ALIMENTAIRE
+  'Restauration': '5610A,5610B,5610C', // Restaurant traditionnel, cafétéria, restauration rapide
+  'Boulangerie': '1071C', 
+  'Pâtisserie': '1071D',
+  'Boucherie': '4722Z,1011Z',
+  'Poissonnerie': '4723Z',
+  'Traiteur': '5621Z',
+  'Bar': '5630Z',
+  'Épicerie': '4711B,4711C,4711D',
+  
+  // SERVICES À LA PERSONNE
+  'Coiffure': '9602A,9602B', // Coiffure, autres soins de beauté
+  'Esthétique': '9602B',
+  'Pressing': '9601B',
+  'Réparation chaussures': '9523Z',
+  'Cordonnerie': '9523Z',
+  
+  // COMMERCE
+  'Commerce de détail': '4711,4719,4721,4722,4724,4725,4729,4730,4741,4742,4751,4752,4753,4754,4759,4761,4762,4763,4764,4765,4771,4772,4773,4774,4775,4776,4777,4778,4779',
+  'Commerce alimentaire': '4711,4721,4722,4723,4724,4725,4729',
+  'Pharmacie': '4773Z',
+  'Opticien': '4778A',
+  'Fleuriste': '4776Z',
+  'Librairie': '4761Z',
+  'Vêtements': '4771Z,4772A,4772B',
+  'Chaussures': '4772A',
+  
+  // CONSTRUCTION & ARTISANAT
+  'Construction': '4120A,4120B,4312A,4321A,4322A,4322B,4329A,4331Z,4332A,4332B,4333Z,4334Z,4339Z,4391A,4391B,4399A,4399B,4399C,4399D',
+  'Plomberie': '4322A,4322B',
+  'Électricité': '4321A',
+  'Menuiserie': '4332A',
+  'Peinture': '4334Z',
+  'Maçonnerie': '4399C',
+  'Couverture': '4391A,4391B',
+  
+  // SERVICES PROFESSIONNELS
+  'Architecture et ingénierie': '7111Z,7112A,7112B', // Archi, ingénierie études techniques
+  'Comptabilité': '6920Z',
+  'Conseil entreprise': '7022Z',
+  'Avocat': '6910Z',
+  'Notaire': '6910Z',
+  'Graphisme': '7410Z',
+  'Communication': '7311Z,7312Z',
+  'Traduction': '7430Z',
+  
+  // SANTÉ
+  'Médecin': '8621Z,8622A,8622B,8623Z',
+  'Kinésithérapeute': '8690D',
+  'Infirmier': '8690D',
+  'Dentiste': '8623Z',
+  'Pharmacie': '4773Z',
+  'Laboratoire analyse': '8690B',
+  
+  // TRANSPORTS
+  'Taxi': '4932Z',
+  'VTC': '4932Z',
+  'Ambulance': '8690A',
+  'Déménagement': '4942Z',
+  'Messagerie': '5320Z',
+  
+  // HÉBERGEMENT & TOURISME
+  'Hébergement': '5510Z,5520Z,5530Z', // Hôtels, héberg touristique, camping
+  'Hôtel': '5510Z',
+  'Gîte': '5520Z',
+  'Camping': '5530Z',
+  'Agence voyage': '7911Z,7912Z',
+  
+  // SERVICES TECHNIQUES
+  'Réparation auto': '4520A,4520B',
+  'Garage': '4520A',
+  'Nettoyage': '8121Z,8122Z',
+  'Sécurité': '8010Z,8020Z',
+  'Entretien espaces verts': '8130Z',
+  
+  // IMMOBILIER
+  'Immobilier': '6810Z,6820A,6820B,6831Z,6832A', // Transaction, location, admin biens
+  'Agent immobilier': '6831Z',
+  'Syndic': '6832A',
+  
+  // NUMÉRIQUE
+  'Développement web': '6201Z,6202A',
+  'Conseil IT': '6202A',
+  'Marketing digital': '7311Z,7312Z,7021Z',
+  
+  // ENSEIGNEMENT
+  'Formation': '8559A,8559B',
+  'Enseignement': '8520Z,8531Z,8532Z',
+  'Auto-école': '8553Z',
+  
+  // SPORT & LOISIRS
+  'Salle de sport': '9311Z,9313Z',
+  'Coach sportif': '9313Z',
+  'Activités récréatives': '9329Z',
+  
+  // CULTURE
+  'Photographe': '7420Z',
+  'Spectacle': '9001Z,9002Z',
+  'Galerie art': '4778C',
+  
+  // LARGE (pour recherches larges)
+  'Commerce': '47', // Toute la division commerce de détail
+  'Industrie': '10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33',
+  'Services': '45,46,47,49,50,51,52,53,55,56,58,59,60,61,62,63,64,65,66,68,69,70,71,72,73,74,75,77,78,79,80,81,82,84,85,86,87,88,90,91,92,93,94,95,96',
+  'Artisanat': '10,13,14,15,16,23,25,31,32,33,43,95,96'
 };
 
 const REGIONS_TO_DEPTS = {

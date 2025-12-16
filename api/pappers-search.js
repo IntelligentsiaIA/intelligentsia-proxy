@@ -198,9 +198,33 @@ export default async function handler(req, res) {
         dirigeants: e.representants?.length || 0,
         capitalSocial: e.capital || null
       })),
+ // 🐛 DEBUG: Voir ce que Pappers renvoie vraiment
+console.log('🐛 [PROXY DEBUG] Premier résultat Pappers brut:', JSON.stringify(data.resultats?.[0], null, 2));
           source: 'pappers',
           enriched: true
         };
+
+  // 🐛 DEBUG: Voir la structure de tranche_effectif_salarie
+  if (data.resultats.indexOf(e) === 0) {
+    console.log('🐛 [PROXY] tranche_effectif_salarie type:', typeof e.tranche_effectif_salarie);
+    console.log('🐛 [PROXY] tranche_effectif_salarie value:', e.tranche_effectif_salarie);
+  }
+  
+  return {
+    siren: e.siren,
+    siret: e.siege?.siret,
+    nom: e.nom_entreprise,
+    ville: e.siege?.ville,
+    codePostal: e.siege?.code_postal,
+    effectif: e.tranche_effectif_salarie?.nom || e.tranche_effectif_salarie || 'Non renseigné',
+    dateCreation: e.date_creation,
+    ca: e.dernier_ca || null,
+    actif: e.statut_rcs === 'Inscrit',
+    dirigeants: e.representants?.length || 0,
+    capitalSocial: e.capital || null
+  };
+}),
+
 
     console.log('✅ [Pappers Proxy]', formatted.total, 'entreprises trouvées');
 

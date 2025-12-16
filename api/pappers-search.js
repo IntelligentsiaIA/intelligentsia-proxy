@@ -136,7 +136,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { secteur, region, limite = 100, page = 1 } = req.query;
+    // ⭐ CHANGEMENT ICI : ajout de "departement" dans la destruction
+    const { secteur, region, departement, limite = 100, page = 1 } = req.query;
     
     const API_TOKEN = process.env.PAPPERS_API_KEY;
 
@@ -152,7 +153,7 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log('🔍 [Pappers Proxy] Recherche:', { secteur, region, limite });
+    console.log('🔍 [Pappers Proxy] Recherche:', { secteur, region, departement, limite });
 
     const params = new URLSearchParams({
       api_token: API_TOKEN,
@@ -164,7 +165,12 @@ export default async function handler(req, res) {
       params.append('code_naf', SECTEUR_TO_NAF[secteur]);
     }
 
-    if (region && REGIONS_TO_DEPTS[region]) {
+    // ⭐ CHANGEMENT ICI : support département OU région
+    if (departement) {
+      // Si département fourni directement (ex: "33" pour Gironde)
+      params.append('departement', departement);
+    } else if (region && REGIONS_TO_DEPTS[region]) {
+      // Sinon, conversion région → départements (ancien système)
       params.append('departement', REGIONS_TO_DEPTS[region]);
     }
 

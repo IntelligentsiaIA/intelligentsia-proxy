@@ -183,7 +183,7 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    const formatted = {
+      const formatted = {
       total: data.total || 0,
       resultats: (data.resultats || []).map(e => ({
         siren: e.siren,
@@ -191,16 +191,16 @@ export default async function handler(req, res) {
         nom: e.nom_entreprise,
         ville: e.siege?.ville,
         codePostal: e.siege?.code_postal,
-        effectif: e.tranche_effectif_salarie || 'Non renseigné',
+        effectif: e.tranche_effectif_salarie?.nom || e.tranche_effectif_salarie || 'Non renseigné',  // ← CORRECTION !
         dateCreation: e.date_creation,
         ca: e.dernier_ca || null,
         actif: e.statut_rcs === 'Inscrit',
         dirigeants: e.representants?.length || 0,
         capitalSocial: e.capital || null
       })),
-      source: 'pappers',
-      enriched: true
-    };
+          source: 'pappers',
+          enriched: true
+        };
 
     console.log('✅ [Pappers Proxy]', formatted.total, 'entreprises trouvées');
 

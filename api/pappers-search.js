@@ -4,7 +4,7 @@
 
 const SECTEUR_TO_NAF = {
   // ALIMENTAIRE
-  'Restauration': '5610A,5610B,5610C', // Restaurant traditionnel, cafétéria, restauration rapide
+  'Restauration': '5610A,5610B,5610C',
   'Boulangerie': '1071C', 
   'Pâtisserie': '1071D',
   'Boucherie': '4722Z,1011Z',
@@ -14,7 +14,7 @@ const SECTEUR_TO_NAF = {
   'Épicerie': '4711B,4711C,4711D',
   
   // SERVICES À LA PERSONNE
-  'Coiffure': '9602A,9602B', // Coiffure, autres soins de beauté
+  'Coiffure': '9602A,9602B',
   'Esthétique': '9602B',
   'Pressing': '9601B',
   'Réparation chaussures': '9523Z',
@@ -40,7 +40,7 @@ const SECTEUR_TO_NAF = {
   'Couverture': '4391A,4391B',
   
   // SERVICES PROFESSIONNELS
-  'Architecture et ingénierie': '7111Z,7112A,7112B', // Archi, ingénierie études techniques
+  'Architecture et ingénierie': '7111Z,7112A,7112B',
   'Comptabilité': '6920Z',
   'Conseil entreprise': '7022Z',
   'Avocat': '6910Z',
@@ -65,7 +65,7 @@ const SECTEUR_TO_NAF = {
   'Messagerie': '5320Z',
   
   // HÉBERGEMENT & TOURISME
-  'Hébergement': '5510Z,5520Z,5530Z', // Hôtels, héberg touristique, camping
+  'Hébergement': '5510Z,5520Z,5530Z',
   'Hôtel': '5510Z',
   'Gîte': '5520Z',
   'Camping': '5530Z',
@@ -79,7 +79,7 @@ const SECTEUR_TO_NAF = {
   'Entretien espaces verts': '8130Z',
   
   // IMMOBILIER
-  'Immobilier': '6810Z,6820A,6820B,6831Z,6832A', // Transaction, location, admin biens
+  'Immobilier': '6810Z,6820A,6820B,6831Z,6832A',
   'Agent immobilier': '6831Z',
   'Syndic': '6832A',
   
@@ -103,8 +103,8 @@ const SECTEUR_TO_NAF = {
   'Spectacle': '9001Z,9002Z',
   'Galerie art': '4778C',
   
-  // LARGE (pour recherches larges)
-  'Commerce': '47', // Toute la division commerce de détail
+  // LARGE
+  'Commerce': '47',
   'Industrie': '10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33',
   'Services': '45,46,47,49,50,51,52,53,55,56,58,59,60,61,62,63,64,65,66,68,69,70,71,72,73,74,75,77,78,79,80,81,82,84,85,86,87,88,90,91,92,93,94,95,96',
   'Artisanat': '10,13,14,15,16,23,25,31,32,33,43,95,96'
@@ -136,12 +136,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ⭐ CHANGEMENT ICI : ajout de "departement" dans la destruction
     const { secteur, region, departement, limite = 100, page = 1 } = req.query;
     
     const API_TOKEN = process.env.PAPPERS_API_KEY;
-
-    console.log('🎉 [PROD] PAPPERS_API_KEY trouvée ?', !!API_TOKEN);
     
     if (!API_TOKEN) {
       return res.status(500).json({ 
@@ -165,12 +162,9 @@ export default async function handler(req, res) {
       params.append('code_naf', SECTEUR_TO_NAF[secteur]);
     }
 
-    // ⭐ CHANGEMENT ICI : support département OU région
     if (departement) {
-      // Si département fourni directement (ex: "33" pour Gironde)
       params.append('departement', departement);
     } else if (region && REGIONS_TO_DEPTS[region]) {
-      // Sinon, conversion région → départements (ancien système)
       params.append('departement', REGIONS_TO_DEPTS[region]);
     }
 
@@ -183,7 +177,7 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-      const formatted = {
+    const formatted = {
       total: data.total || 0,
       resultats: (data.resultats || []).map(e => ({
         siren: e.siren,
@@ -191,40 +185,16 @@ export default async function handler(req, res) {
         nom: e.nom_entreprise,
         ville: e.siege?.ville,
         codePostal: e.siege?.code_postal,
-        effectif: e.tranche_effectif_salarie?.nom || e.tranche_effectif_salarie || 'Non renseigné',  // ← CORRECTION !
+        effectif: e.tranche_effectif_salarie?.nom || e.tranche_effectif_salarie || 'Non renseigné',
         dateCreation: e.date_creation,
         ca: e.dernier_ca || null,
         actif: e.statut_rcs === 'Inscrit',
         dirigeants: e.representants?.length || 0,
         capitalSocial: e.capital || null
       })),
- // 🐛 DEBUG: Voir ce que Pappers renvoie vraiment
-console.log('🐛 [PROXY DEBUG] Premier résultat Pappers brut:', JSON.stringify(data.resultats?.[0], null, 2));
-          source: 'pappers',
-          enriched: true
-        };
-
-  // 🐛 DEBUG: Voir la structure de tranche_effectif_salarie
-  if (data.resultats.indexOf(e) === 0) {
-    console.log('🐛 [PROXY] tranche_effectif_salarie type:', typeof e.tranche_effectif_salarie);
-    console.log('🐛 [PROXY] tranche_effectif_salarie value:', e.tranche_effectif_salarie);
-  }
-  
-  return {
-    siren: e.siren,
-    siret: e.siege?.siret,
-    nom: e.nom_entreprise,
-    ville: e.siege?.ville,
-    codePostal: e.siege?.code_postal,
-    effectif: e.tranche_effectif_salarie?.nom || e.tranche_effectif_salarie || 'Non renseigné',
-    dateCreation: e.date_creation,
-    ca: e.dernier_ca || null,
-    actif: e.statut_rcs === 'Inscrit',
-    dirigeants: e.representants?.length || 0,
-    capitalSocial: e.capital || null
-  };
-}),
-
+      source: 'pappers',
+      enriched: true
+    };
 
     console.log('✅ [Pappers Proxy]', formatted.total, 'entreprises trouvées');
 

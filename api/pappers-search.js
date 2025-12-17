@@ -220,15 +220,17 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
+  // Le total renvoyé par Pappers est DÉJÀ filtré par département !
     const formatted = {
-      total: data.total || 0,
+      total: data.total || 0, // ← Ce total inclut déjà le filtre département
+      totalLocal: data.total || 0, // ← Alias explicite
       resultats: (data.resultats || []).map(e => ({
         siren: e.siren,
         siret: e.siege?.siret,
         nom: e.nom_entreprise,
         ville: e.siege?.ville,
         codePostal: e.siege?.code_postal,
-        effectif: estimerEffectif(e), // ← ESTIMATION INTELLIGENTE !
+        effectif: estimerEffectif(e),
         dateCreation: e.date_creation,
         ca: e.dernier_ca || null,
         actif: e.statut_rcs === 'Inscrit',

@@ -126,6 +126,49 @@ const REGIONS_TO_DEPTS = {
   "Provence-Alpes-Côte d'Azur": '04,05,06,13,83,84'
 };
 
+/**
+ * Estime l'effectif d'une entreprise si non renseigné par Pappers
+ * Basé sur CA, capital social et forme juridique
+ */
+function estimerEffectif(entreprise) {
+  // Si effectif déjà renseigné par Pappers, on le garde
+  if (entreprise.tranche_effectif_salarie?.nom) {
+    return entreprise.tranche_effectif_salarie.nom;
+  }
+  
+  const ca = entreprise.dernier_ca || 0;
+  const capital = entreprise.capital || 0;
+  const nbRepresentants = entreprise.representants?.length || 0;
+  const formeJuridique = entreprise.forme_juridique || '';
+  
+  // Règles d'estimation basées sur CA (prioritaire)
+  if (ca > 10000000) return '50 à 99 salariés';
+  if (ca > 5000000) return '20 à 49 salariés';
+  if (ca > 2000000) return '10 à 19 salariés';
+  if (ca > 800000) return '6 à 9 salariés';
+  if (ca > 400000) return '3 à 5 salariés';
+  if (ca > 150000) return '1 ou 2 salariés';
+  if (ca > 50000) return '1 ou 2 salariés';
+  
+  // Si pas de CA mais capital important (sociétés de holding, SCI, etc.)
+  if (capital > 500000) return '10 à 19 salariés';
+  if (capital > 200000) return '6 à 9 salariés';
+  if (capital > 80000) return '3 à 5 salariés';
+  if (capital > 20000) return '1 ou 2 salariés';
+  
+  // Forme juridique = indices
+  if (formeJuridique.includes('SA') || formeJuridique.includes('SAS')) {
+    return '3 à 5 salariés'; // Structures plus grandes généralement
+  }
+  
+  // Nombre de représentants
+  if (nbRepresentants >= 3) return '3 à 5 salariés';
+  if (nbRepresentants === 2) return '1 ou 2 salariés';
+  
+  // Par défaut = micro-entreprise / indépendant
+  return '0 salarié';
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -185,7 +228,7 @@ export default async function handler(req, res) {
         nom: e.nom_entreprise,
         ville: e.siege?.ville,
         codePostal: e.siege?.code_postal,
-        effectif: e.tranche_effectif_salarie?.nom || e.tranche_effectif_salarie || 'Non renseigné',
+        effectif: estimerEffectif(e), // ← ESTIMATION INTELLIGENTE !
         dateCreation: e.date_creation,
         ca: e.dernier_ca || null,
         actif: e.statut_rcs === 'Inscrit',
